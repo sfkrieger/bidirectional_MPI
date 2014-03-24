@@ -44,15 +44,9 @@ int main(int argc, char** argv) {
 	int right = ((world_rank == (world_size - 1)) ? 0 : world_rank + 1);
 	int left = ((world_rank == 0) ? (world_size - 1) : world_rank - 1);
 
-	/**
-	 * Initialize global struct of info
-	 */
-	//	Info info = malloc(sizeof(info));
-
 	/*
 	 * deal with the struct creation
 	 */
-	/* create a type for struct car */
 	const int nitems = 3;
 	int blocklengths[3] = { 1, 1, 1 };
 	MPI_Datatype types[3] = { MPI_INT, MPI_INT, MPI_INT };
@@ -75,7 +69,6 @@ int main(int argc, char** argv) {
 	MPI_Send(&to_pass, 1, mpi_pkg, left, ELECTION, MPI_COMM_WORLD);
 	no_sent = no_sent + 2;
 
-
 	MPI_Status status;
 	pkg result;
 	replies_rcvd = (int*) calloc(world_size, sizeof(int));
@@ -85,7 +78,7 @@ int main(int argc, char** argv) {
 
 		MPI_Recv(&result, 1, mpi_pkg, MPI_ANY_SOURCE, MPI_ANY_TAG,
 				MPI_COMM_WORLD, &status);
-		no_recvd = no_recvd + 1;
+		no_recvd++;
 
 		//		MPI_Waitall(2, recv_req, status);
 
@@ -102,8 +95,8 @@ int main(int argc, char** argv) {
 
 			if (leader != -1) {
 				i_am_leader = 1;
-				printf("Process %d declares %d leader\n", world_rank, leader);
-				result.hops = no_sent + 1;
+				//				printf("Process %d declares %d leader\n", world_rank, leader);
+				result.hops = no_sent;
 				result.phase = no_recvd;
 				MPI_Send(&result, 1, mpi_pkg, right, LEADER, MPI_COMM_WORLD);
 				MPI_Recv(&result, 1, mpi_pkg, left, LEADER, MPI_COMM_WORLD,
@@ -125,10 +118,10 @@ int main(int argc, char** argv) {
 			}
 
 			if (replies_rcvd[result.phase] == 2) {
-				printf(
-						"Process %d aparently won phase %d (really %d). It had a distance of %d\n",
-						world_rank, result.phase, to_pass.phase, result.hops);
-				to_pass.phase = to_pass.phase + 1;
+				//				printf(
+				//						"Process %d aparently won phase %d (really %d). It had a distance of %d\n",
+				//						world_rank, result.phase, to_pass.phase, result.hops);
+				to_pass.phase++;
 				to_pass.hops = 0;
 
 				MPI_Send(&to_pass, 1, mpi_pkg, right, ELECTION, MPI_COMM_WORLD);
@@ -137,7 +130,6 @@ int main(int argc, char** argv) {
 				printf(
 						"Process %d sent out a new election for phase %d. The status of the counter at this phase is currently %d\n",
 						world_rank, to_pass.phase, replies_rcvd[to_pass.phase]);
-				no_sent = no_sent + 2;
 			}
 
 			if (reply_status == -1) {
@@ -154,7 +146,7 @@ int main(int argc, char** argv) {
 						"========== ERROR - THE SOURCE OF THIS LEADER TAG WAS NOT FROM THE LEFT IN PROCESS %d ===========\n",
 						world_rank);
 			} else {
-				result.hops = result.hops + no_sent + 1;
+				result.hops = result.hops + no_sent;
 				result.phase = result.hops + no_recvd;
 				MPI_Send(&result, 1, mpi_pkg, right, LEADER, MPI_COMM_WORLD);
 			}
@@ -166,22 +158,24 @@ int main(int argc, char** argv) {
 
 		}
 
-//		if (leader != -1) {
-//			printf("Process %d declares %d leader\n", world_rank, leader);
-////			MPI_Send(&leader, 1, MPI_INT, left, LEADER, MPI_COMM_WORLD);
-////			MPI_Send(&leader, 1, MPI_INT, right, LEADER, MPI_COMM_WORLD);
-//			//			MPI_Recv()
-//
-//		}
+		//		if (leader != -1) {
+		//			printf("Process %d declares %d leader\n", world_rank, leader);
+		////			MPI_Send(&leader, 1, MPI_INT, left, LEADER, MPI_COMM_WORLD);
+		////			MPI_Send(&leader, 1, MPI_INT, right, LEADER, MPI_COMM_WORLD);
+		//			//			MPI_Recv()
+		//
+		//		}
 	}
 
-	printf("rank=%d, id=%d, leader=%d, mrcvd=%d, msent=%d\n", world_rank, id, i_am_leader, no_recvd, no_sent);
+	printf("rank=%d, id=%d, leader=%d, mrcvd=%d, msent=%d\n", world_rank, id,
+			leader, no_recvd, no_sent);
 
-	if(i_am_leader == 1){
+	if (i_am_leader == 1) {
 		//i am leader
-//		result.hops = no_sent + 1;
-//		result.phase = no_recvd;
-		printf("rank=%d, id=%d, trcvd=%d, tsent=%d\n", world_rank, id, result.phase + 1, result.hops);
+		//		result.hops = no_sent + 1;
+		//		result.phase = no_recvd;
+		printf("rank=%d, id=%d, trcvd=%d, tsent=%d\n", world_rank, id,
+				result.phase + 1, result.hops);
 
 	}
 	MPI_Finalize();
@@ -202,51 +196,36 @@ int elected_message(int primary, int secondary, pkg *primary_pkg) {
 	MPI_Type_create_struct(nitems, blocklengths, offsets, types, &mpi_pkg);
 	MPI_Type_commit(&mpi_pkg);
 
-	//	int distance = ((primary_pkg->hops == 0) ? 1 : (1 << primary_pkg->hops));
+	primary_pkg->hops = primary_pkg->hops + 1;
 	int distance = primary_pkg->hops;
 	int max_dist = ((primary_pkg->phase == 0) ? 1 : (1 << primary_pkg->phase));
 	int max = power(2, primary_pkg->phase);
 
-	int message_sent = 0;
-	int evaluate = (primary_pkg->id > id) && (distance < max_dist);
-	if (evaluate != 0) {
-		//		printf("Evaluate is greater than 0... so it will forward this...\n");
-	}
 
 	if ((primary_pkg->id > id) && (distance < max_dist)) {
 		//keep passing it forward
-		message_sent = 1;
-		primary_pkg->hops = primary_pkg->hops + 1;
-		printf(
-				"Process rank-%d id-%d, got < id-%d. Hops-%d, max_dist-%d, max-%d. It is forwarding it to %d\n",
-				world_rank, id, primary_pkg->id, distance, max_dist, max,
-				secondary);
+		//		printf(
+		//				"Process rank-%d id-%d, got < id-%d. Hops-%d, max_dist-%d, max-%d. It is forwarding it to %d\n",
+		//				world_rank, id, primary_pkg->id, distance, max_dist, max,
+		//				secondary);
 		MPI_Send(primary_pkg, 1, mpi_pkg, secondary, ELECTION, MPI_COMM_WORLD);
-		no_sent = no_sent + 1;
+		no_sent++;
 	}
 
 	if ((primary_pkg->id > id) && (distance == max_dist)) {
-		printf(
-				"Process rank-%d id-%d, got < id-%d. Distance-%d, max_dist-%d, max-%d. It is sending it back to %d\n",
-				world_rank, id, primary_pkg->id, distance, max_dist, max,
-				primary);
+		//		printf(
+		//				"Process rank-%d id-%d, got < id-%d. Distance-%d, max_dist-%d, max-%d. It is sending it back to %d\n",
+		//				world_rank, id, primary_pkg->id, distance, max_dist, max,
+		//				primary);
 		MPI_Send(primary_pkg, 1, mpi_pkg, primary, REPLY, MPI_COMM_WORLD);
-		no_sent = no_sent + 1;
-
-		message_sent = 1;
-
+		no_sent++;
 	}
 
 	if (primary_pkg->id == id) {
-		printf("Rank-%d, id-%d won the round\n", world_rank, id);
+		//		printf("Rank-%d, id-%d won the round\n", world_rank, id);
 		return id;
 	}
 
-	if (message_sent == 0) {
-		printf(
-				"Process rank-%d id-%d, got package rank-%d. Distance-%d, max-%d. It is eating it\n",
-				world_rank, id, primary, distance, max_dist);
-	}
 	return -1;
 }
 
@@ -266,19 +245,18 @@ int reply_message(int primary, int secondary, pkg *primary_pkg) {
 	MPI_Type_commit(&mpi_pkg);
 
 	if (id != primary_pkg->id) {
-		printf("Process %d is forwarding a reply message\n", world_rank);
+		//		printf("Process %d is forwarding a reply message\n", world_rank);
 		MPI_Send(primary_pkg, 1, mpi_pkg, secondary, REPLY, MPI_COMM_WORLD);
-		no_sent = no_sent + 1;
-
+		no_sent++;
 		return 0;
 
 	} else {
 		//then its my id
 		replies_rcvd[primary_pkg->phase] = replies_rcvd[primary_pkg->phase] + 1;
 		int temp = replies_rcvd[primary_pkg->phase];
-		printf(
-				"Process %d got its own id back for phase %d. That brings the toll to %d\n",
-				world_rank, primary_pkg->phase, temp);
+		//		printf(
+		//				"Process %d got its own id back for phase %d. That brings the toll to %d\n",
+		//				world_rank, primary_pkg->phase, temp);
 		return 1;
 	}
 
