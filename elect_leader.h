@@ -10,6 +10,12 @@ typedef struct pkg_s {
 	int hops;
 } pkg;
 
+typedef struct leader_s {
+	int id;
+	int total_sent;
+	int total_recv;
+} leader_pkg;
+
 typedef struct info_s {
 	/* global setting info */
 	int rank;
